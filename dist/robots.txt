@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://ouiski-vars-enzo.enzo-balacco.chatgpt.site/sitemap.xml
