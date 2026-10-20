@@ -1,65 +1,106 @@
+import { authentic, isoTime, networkFingerprint } from './attestations.mjs';
+
 const ranks = { novice: 0, easy: 1, intermediate: 2, advanced: 3, expert: 3 };
 const levels = { vertes: 0, bleues: 1, rouges: 2, noires: 3 };
+const liftTypes = new Set(['chair_lift', 'platter', 'magic_carpet', 'mixed_lift']);
 const nonempty = s => typeof s === 'string' && s.trim().length > 0;
+const record = o => o !== null && typeof o === 'object' && !Array.isArray(o)
+  && [Object.prototype, null].includes(Object.getPrototypeOf(o));
+export const MAX_OPENING_AGE_MS = 15 * 60_000;
+const validPoint = p => Array.isArray(p) && p.length === 2 && Array.from(p).every(Number.isFinite)
+  && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
 
-function confirmed(review) {
-  return review?.validation === 'confirmed' && review.authorization === 'allowed'
-    && nonempty(review.evidence?.reference) && nonempty(review.evidence?.validatedBy)
-    && Number.isFinite(Date.parse(review.evidence?.validatedAt));
-}
-
-/** Pas de recherche par proximité, de projection GPS ni de fusion de nœuds OSM. */
-export function findRoute(network, {
-  from, to, level = 'bleues', availability = {}, now = Date.now(), maxAgeMs = 15 * 60_000,
-}) {
-  if (!Object.hasOwn(levels, level)) throw new Error('Niveau invalide');
-  if (!Number.isFinite(now) || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0) throw new Error('Horloge ou fraîcheur invalide');
-  if (network.schemaVersion !== 1) throw new Error('Version de réseau invalide');
-  const nodes = new Map(), ways = new Map(network.ways.map(w => [w.id, w]));
-  if (ways.size !== network.ways.length) throw new Error('Identifiants de tracé dupliqués');
+function validateNetwork(network) {
+  if (!record(network) || network.schemaVersion !== 1
+    || !['ways', 'nodes', 'edges'].every(k => Array.isArray(network[k]))) throw new Error('Réseau invalide');
+  const ways = new Map(), sourcePoints = new Map(), nodes = new Map(), seen = new Set();
+  for (const w of network.ways) {
+    if (!record(w) || !nonempty(w.id) || ways.has(w.id) || !record(w.tags)
+      || !Array.isArray(w.nodes) || !Array.isArray(w.points) || w.nodes.length < 2
+      || w.nodes.length !== w.points.length) throw new Error('Tracé source invalide');
+    if (Object.hasOwn(w.tags, 'aerialway') && !liftTypes.has(w.tags.aerialway)) throw new Error('Tracé : type de remontée non pris en charge');
+    for (let i = 0; i < w.nodes.length; i++) {
+      if (!nonempty(w.nodes[i]) || !validPoint(w.points[i])) throw new Error('Tracé source invalide');
+      const old = sourcePoints.get(w.nodes[i]);
+      if (old && (old[0] !== w.points[i][0] || old[1] !== w.points[i][1])) throw new Error('Tracé : nœud OSM contradictoire');
+      sourcePoints.set(w.nodes[i], w.points[i]);
+    }
+    ways.set(w.id, w);
+  }
   for (const n of network.nodes) {
-    const way = ways.get(n.sourceWayId);
-    if (!nonempty(n.id) || nodes.has(n.id) || !way || !Number.isInteger(n.sourceIndex)
-      || n.sourceIndex < 0 || way.nodes[n.sourceIndex] !== n.sourceNodeId
-      || !Array.isArray(n.coordinates) || n.coordinates.length !== 2 || !n.coordinates.every(Number.isFinite)
-      || Math.abs(n.coordinates[0]) > 90 || Math.abs(n.coordinates[1]) > 180
-      || JSON.stringify(n.coordinates) !== JSON.stringify(way.points[n.sourceIndex])) {
+    const w = ways.get(n?.sourceWayId);
+    if (!record(n) || !w || nodes.has(n.id) || !Number.isInteger(n.sourceIndex) || n.sourceIndex < 0
+      || n.id !== `${w.id}:${n.sourceIndex}` || !nonempty(n.sourceNodeId)
+      || w.nodes[n.sourceIndex] !== n.sourceNodeId || !validPoint(n.coordinates)
+      || n.coordinates[0] !== w.points[n.sourceIndex]?.[0] || n.coordinates[1] !== w.points[n.sourceIndex]?.[1]) {
       throw new Error('Nœud de réseau invalide');
     }
     nodes.set(n.id, n);
   }
+  for (const e of network.edges) {
+    if (!record(e) || !nonempty(e.id) || seen.has(e.id) || !nodes.has(e.from) || !nodes.has(e.to)
+      || e.from === e.to || !['piste', 'lift', 'connection'].includes(e.kind)) throw new Error('Arête de réseau invalide');
+    seen.add(e.id);
+    const a = nodes.get(e.from), b = nodes.get(e.to), w = ways.get(e.sourceWayId);
+    if (e.kind === 'connection') {
+      if (a.sourceWayId === b.sourceWayId || a.sourceNodeId !== b.sourceNodeId
+        || e.sourceNodeId !== a.sourceNodeId || e.topology !== 'shared_source_node'
+        || a.coordinates[0] !== b.coordinates[0] || a.coordinates[1] !== b.coordinates[1]) {
+        throw new Error('Arête : connexion sans nœud source commun');
+      }
+    } else if (!w || a.sourceWayId !== w.id || b.sourceWayId !== w.id || b.sourceIndex !== a.sourceIndex + 1
+      || e.kind !== (w.tags.aerialway ? 'lift' : 'piste')
+      || (e.kind === 'piste' && (w.tags['piste:type'] !== 'downhill' || e.difficulty !== w.tags['piste:difficulty']))) {
+      throw new Error('Arête hors du tracé source');
+    }
+  }
+  return { nodes, ways };
+}
+
+/** Pas de recherche par proximité, de projection GPS ni de fusion de nœuds OSM. */
+export function findRoute(network, options = {}) {
+  if (!record(options)) throw new Error('Options de routage invalides');
+  const { from, to, level = 'bleues', availability = {}, now = Date.now(),
+    maxAgeMs = MAX_OPENING_AGE_MS, trust = {} } = options;
+  if (typeof level !== 'string' || !Object.hasOwn(levels, level)) throw new Error('Niveau invalide');
+  if (!Number.isFinite(now) || !Number.isFinite(new Date(now).getTime())
+    || !Number.isFinite(maxAgeMs) || maxAgeMs <= 0 || maxAgeMs > MAX_OPENING_AGE_MS) throw new Error('Horloge ou fraîcheur invalide');
+  if (!record(availability)) throw new Error('Disponibilités invalides');
+  if (!record(trust)) throw new Error('Registre de confiance invalide');
+  const { nodes, ways } = validateNetwork(network);
   if (!nodes.has(from) || !nodes.has(to)) throw new Error('Départ ou arrivée absent du réseau');
   // Un point seul ne constitue pas un itinéraire validé.
   if (from === to) return { status: 'refused', reason: 'identical_endpoints' };
-  const graph = new Map(), seen = new Set();
+  const fingerprint = networkFingerprint(network), graph = new Map();
+  const compatible = n => {
+    const w = ways.get(n.sourceWayId), difficulty = w.tags['piste:difficulty'];
+    return !!w.tags.aerialway || (typeof difficulty === 'string' && Object.hasOwn(ranks, difficulty) && ranks[difficulty] <= levels[level]);
+  };
+  const liftTerminal = n => {
+    const w = ways.get(n.sourceWayId);
+    return !w.tags.aerialway || n.sourceIndex === 0 || n.sourceIndex === w.nodes.length - 1;
+  };
+  if (!liftTerminal(nodes.get(from)) || !liftTerminal(nodes.get(to))) {
+    return { status: 'refused', reason: 'intermediate_lift_endpoint' };
+  }
   for (const e of network.edges) {
-    if (!nonempty(e.id) || seen.has(e.id) || !nodes.has(e.from) || !nodes.has(e.to)
-      || !['piste', 'lift', 'connection'].includes(e.kind)) throw new Error('Arête de réseau invalide');
-    seen.add(e.id);
-    if (!confirmed(e.review)) continue;
-    if (Date.parse(e.review.evidence.validatedAt) > now) continue;
-    if (!Array.isArray(e.review.directions) || !e.review.directions.length
-      || e.review.directions.some(d => !['forward', 'reverse'].includes(d))) continue;
+    const r = e.review;
+    if (!record(r) || r.validation !== 'confirmed' || r.authorization !== 'allowed'
+      || !record(r.evidence) || !nonempty(r.evidence.reference) || !nonempty(r.evidence.validatedBy)) continue;
+    const validated = isoTime(r.evidence.validatedAt), expires = isoTime(r.evidence.validUntil);
+    if (!Number.isFinite(validated) || !Number.isFinite(expires) || validated > now
+      || expires <= now || expires <= validated) continue;
+    if (!Array.isArray(r.directions) || !r.directions.length || new Set(r.directions).size !== r.directions.length
+      || Array.from(r.directions).some(d => !['forward', 'reverse'].includes(d))) continue;
+    if (!authentic('review', fingerprint, e.id, r, trust.reviewKeys)) continue;
     const opening = Object.hasOwn(availability, e.id) ? availability[e.id] : null;
-    const timestamp = Date.parse(opening?.observedAt);
-    if (opening?.state !== 'open' || !nonempty(opening.source) || !Number.isFinite(timestamp)
+    const timestamp = isoTime(opening?.observedAt);
+    if (!record(opening) || opening.state !== 'open' || !nonempty(opening.source) || !Number.isFinite(timestamp)
       || timestamp > now || now - timestamp > maxAgeMs) continue;
-    if (e.kind === 'piste' && (!Object.hasOwn(ranks, e.difficulty) || ranks[e.difficulty] > levels[level])) continue;
-    // Une connexion doit rester attachée au même nœud cartographique explicite.
+    if (!authentic('opening', fingerprint, e.id, opening, trust.openingKeys)) continue;
     const a = nodes.get(e.from), b = nodes.get(e.to);
-    if (e.kind === 'connection' && (a.sourceNodeId !== b.sourceNodeId
-      || e.sourceNodeId !== a.sourceNodeId || JSON.stringify(a.coordinates) !== JSON.stringify(b.coordinates))) {
-      throw new Error('Connexion sans nœud source commun');
-    }
-    if (e.kind !== 'connection') {
-      const way = ways.get(e.sourceWayId);
-      if (!way || a.sourceWayId !== e.sourceWayId || b.sourceWayId !== e.sourceWayId
-        || b.sourceIndex !== a.sourceIndex + 1
-        || e.kind !== (way.tags.aerialway ? 'lift' : 'piste')
-        || (e.kind === 'piste' && e.difficulty !== way.tags['piste:difficulty'])) {
-        throw new Error('Arête hors du tracé source');
-      }
-    }
+    if (!compatible(a) || !compatible(b)) continue;
+    if (e.kind === 'connection' && (!liftTerminal(a) || !liftTerminal(b))) continue;
     const cost = distance(a.coordinates, b.coordinates);
     for (const direction of e.review.directions) {
       const start = direction === 'forward' ? e.from : e.to;
@@ -85,7 +126,7 @@ export function findRoute(network, {
   while (current !== from) { const step = previous.get(current); steps.unshift(step); current = step.from; }
   return {
     status: 'found', distanceMetres: distances.get(to), steps,
-    coordinates: [nodes.get(from).coordinates, ...steps.map(s => nodes.get(s.to).coordinates)],
+    coordinates: [nodes.get(from).coordinates, ...steps.map(s => nodes.get(s.to).coordinates)].map(p => [...p]),
     availabilityCheckedAt: new Date(now).toISOString(),
     warning: 'Résultat technique sur validations fournies ; ne garantit pas la sécurité terrain. Aucun temps de parcours estimé.',
   };
