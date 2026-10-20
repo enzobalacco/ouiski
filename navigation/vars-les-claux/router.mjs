@@ -10,7 +10,7 @@ export const MAX_OPENING_AGE_MS = 15 * 60_000;
 const validPoint = p => Array.isArray(p) && p.length === 2 && Array.from(p).every(Number.isFinite)
   && Math.abs(p[0]) <= 90 && Math.abs(p[1]) <= 180;
 
-function validateNetwork(network) {
+export function validateNetwork(network) {
   if (!record(network) || network.schemaVersion !== 1
     || !['ways', 'nodes', 'edges'].every(k => Array.isArray(network[k]))) throw new Error('Réseau invalide');
   const ways = new Map(), sourcePoints = new Map(), nodes = new Map(), seen = new Set();
