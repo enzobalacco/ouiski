@@ -15,6 +15,9 @@ GPS en montagne. Le guidage public reste inchangé et le nouveau moteur est isol
   `gps-qualification-report.md`, avec dénominateurs et refus distingués des succès.
 - Workflow automatique sur GitHub pour détecter les régressions futures. L'état
   réel des exécutions GitHub doit être vérifié avant une fusion.
+- Banc d'essai séparé avec carte vectorielle locale, démarrage/arrêt explicite du
+  capteur et effacement des positions. Contrôles navigateur simulés sur écran
+  mobile et ordinateur. Voir `mobile-test/README.md` ; aucun déploiement public.
 
 ## Conditions encore nécessaires
 
@@ -23,10 +26,11 @@ GPS en montagne. Le guidage public reste inchangé et le nouveau moteur est isol
    Aucune de ces validations n'est inventée ou enregistrée ici.
 2. **Source fiable d'ouverture.** Définir qui fournit l'information, sa fraîcheur,
    sa signature et le comportement en cas d'absence ou de fermeture.
-3. **Essai sur téléphone en dehors du site public.** Préparer séparément un banc
-   d'essai local/privé, demander le consentement du testeur, vérifier autorisation
-   GPS, refus, précision et interruption. Aucun adaptateur de capteur ni collecte
-   de localisation n'a été activé dans ce travail.
+3. **Essai sur téléphone en dehors du site public.** Le banc logiciel est prêt ;
+   préparer un accès HTTPS privé reconnu par le téléphone, puis vérifier le
+   capteur réel, son autorisation, refus, précision et interruption. L'adaptateur
+   existe uniquement dans cette page séparée, sur clic explicite. Aucun test sur
+   appareil physique ni collecte de position personnelle n'a été réalisé ici.
 4. **Parcours accompagnés et vérité terrain indépendante.** Comparer les résultats
    à des repères observés par les moniteurs, pas à la carte qui a servi à générer
    le simulateur. Inclure téléphone en poche, forêt, proximité des remontées,

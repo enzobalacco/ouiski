@@ -22,3 +22,19 @@ jobs:
           node-version: '${{ matrix.node }}'
       - run: node --test navigation/vars-les-claux/*.test.mjs
       - run: node navigation/vars-les-claux/gps-qualification.mjs
+  mobile-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: navigation/vars-les-claux/mobile-test
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm test

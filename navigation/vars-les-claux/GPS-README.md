@@ -1,10 +1,13 @@
 # Phase 2 — suivi GPS et correspondance prudente
 
-Module Node.js 20+ isolé : `gps-tracker.mjs` et `gps-geometry.mjs`. Il réutilise le
+Modules JavaScript isolés, utilisables sous Node.js 20+ et navigateur récent :
+`gps-tracker.mjs` et `gps-geometry.mjs`. Le suivi réutilise le
 réseau candidat de phase 1 et son validateur structurel, sans modifier le réseau,
-les données source, les signatures ou l'algorithme de routage. Le seul changement
-au module `router.mjs` est l'export de sa fonction `validateNetwork` existante.
-Ce module n'est pas importé par le site et ne crée aucun itinéraire.
+les données source, les signatures ou l'algorithme de routage.
+Le validateur est désormais partagé dans `network-validation.mjs`, sans changement
+de ses contrôles ; `router.mjs` le réexporte pour conserver son contrat. Le suivi
+n'importe donc pas les dépendances cryptographiques Node du routage dans le navigateur.
+Ce module n'est pas importé par le site public et ne crée aucun itinéraire.
 
 ## Contrat
 

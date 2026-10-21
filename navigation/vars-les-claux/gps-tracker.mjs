@@ -1,4 +1,4 @@
-import { validateNetwork } from './router.mjs';
+import { validateNetwork } from './network-validation.mjs';
 import { distanceMetres, distanceToSegment } from './gps-geometry.mjs';
 
 // Seuils de prototype, conservateurs mais PAS validés en montagne.
