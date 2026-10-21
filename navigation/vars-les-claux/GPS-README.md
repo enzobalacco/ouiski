@@ -20,6 +20,13 @@ tracker.reset();       // efface l'acquisition et les données volatiles
 tracker.destroy();     // efface les données volatiles et désactive l'instance
 ```
 
+Pour évaluer Vars, fournir aussi `contextWays: source.ways` dans les options, où
+`source` est le contenu original de `dist/ski-data.json`. Les pistes/remontées hors
+du réseau candidat servent uniquement de garde-fous d'ambiguïté : elles ne sont
+jamais confirmées, ajoutées au graphe ou autorisées. Le contexte est copié, contrôlé
+et non modifié. Sans ce contexte, l'estimation reste limitée au petit inventaire.
+Un contexte fourni n'est pas nécessairement complet ni validé sur le terrain.
+
 Les coordonnées sont en degrés WGS84, `accuracy` est la précision horizontale en
 mètres, `timestamp` le temps de l'observation en millisecondes depuis l'époque Unix.
 Les noms correspondent à `GeolocationCoordinates.accuracy` et
@@ -141,8 +148,19 @@ Ne pas annoncer un guidage sûr à partir des seuls tests logiciels.
 node --test navigation/vars-les-claux/router.test.mjs navigation/vars-les-claux/gps-tracker.test.mjs
 ```
 
-Vérification de cette phase : **94 tests réussis**, dont 42 tests GPS et les
-52 tests de sécurité de phase 1, sans échec ni test ignoré.
+Vérification initiale de phase 2 : 94 tests. Le renforcement ajoute cinq tests de
+contexte : **99 tests au total**, dont les 52 tests de phase 1. Tout lancer avec :
+
+```sh
+node --test navigation/vars-les-claux/*.test.mjs
+node navigation/vars-les-claux/gps-qualification.mjs
+```
+
+La seconde commande produit un rapport agrégé reproductible de simulations et
+échoue si une fausse confirmation ou une autorisation de routage est observée
+avec le contexte. Elle n'enregistre aucune observation personnelle. Voir
+`gps-qualification-report.md`. Le workflow GitHub lance ces deux commandes sur
+Node 22 et 24 ; son ajout ne prouve pas qu'une exécution distante a déjà réussi.
 
 Les observations `SIM_*` sont entièrement simulées dans les tests, distinctes des
 données source. Le test de lecture de `network.json` utilise un point simulé et

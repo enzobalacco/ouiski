@@ -20,16 +20,38 @@ const note = 'Estimation géométrique uniquement : aucune validation terrain, o
 /** État volatile minimal. Aucun capteur, requête réseau, journal ou stockage persistant.
  * L'appelant transmet explicitement les observations. Aucun appel à findRoute.
  */
-export function createGpsTracker(network, { clock = Date.now } = {}) {
+export function createGpsTracker(network, { clock = Date.now, contextWays = [] } = {}) {
   if (typeof clock !== 'function') throw new Error('Horloge GPS invalide');
   const snapshot = structuredClone(network);
   const { nodes, ways } = validateNetwork(snapshot);
   const segments = snapshot.edges.filter(e => e.kind !== 'connection').map(e => ({
     id: e.id, sourceWayId: e.sourceWayId, kind: e.kind, sourceIndex: nodes.get(e.from).sourceIndex,
     start: nodes.get(e.from).coordinates, end: nodes.get(e.to).coordinates,
-    name: ways.get(e.sourceWayId).tags.name || null,
+    name: ways.get(e.sourceWayId).tags.name || null, inNetwork: true,
   }));
   if (!segments.length) throw new Error('Réseau GPS sans tronçon');
+  // Les tracés voisins servent seulement à lever un doute, jamais au routage.
+  if (!Array.isArray(contextWays)) throw new Error('Contexte cartographique invalide');
+  const context = structuredClone(contextWays), seenContext = new Set();
+  for (const w of context) {
+    if (!plain(w) || typeof w.id !== 'string' || !w.id || seenContext.has(w.id)
+      || !plain(w.tags) || !Array.isArray(w.nodes) || !Array.isArray(w.points)
+      || w.points.length < 2 || w.nodes.length !== w.points.length) throw new Error('Tracé de contexte invalide');
+    seenContext.add(w.id);
+    for (const p of w.points) distanceMetres(p, p);
+    const selected = ways.get(w.id);
+    if (selected) {
+      if (JSON.stringify(selected.nodes) !== JSON.stringify(w.nodes)
+        || JSON.stringify(selected.points) !== JSON.stringify(w.points)) throw new Error('Contexte contradictoire avec le réseau');
+      continue;
+    }
+    if (w.tags['piste:type'] !== 'downhill' && !w.tags.aerialway) continue;
+    for (let i = 0; i < w.points.length - 1; i++) segments.push({
+      id: `context/${w.id}/${i}`, sourceWayId: w.id, sourceIndex: i,
+      kind: w.tags.aerialway ? 'lift' : 'piste', start: w.points[i], end: w.points[i+1],
+      name: w.tags.name || null, inNetwork: false,
+    });
+  }
   // Vérifier une fois les géométries dégénérées/antipodales, sans combler les trous.
   for (const s of segments) distanceToSegment(s.start, s.start, s.end);
   let watermark = null, lastFix = null, pending = null, confirmed = null;
@@ -105,7 +127,7 @@ export function createGpsTracker(network, { clock = Date.now } = {}) {
     const nearest = [...byWay.values()].sort((a, b) => a.distanceMetres - b.distanceMetres || a.sourceWayId.localeCompare(b.sourceWayId));
     const plausible = nearest.filter(c => c.distanceMetres <= radius);
     // Les candidats incertains n'exposent aucun point de départ pour le routeur.
-    const candidates = plausible.map(c => ({ sourceWayId: c.sourceWayId, kind: c.kind, distanceMetres: c.distanceMetres }));
+    const candidates = plausible.map(c => ({ sourceWayId: c.sourceWayId, kind: c.kind, distanceMetres: c.distanceMetres, inNetwork: c.inNetwork }));
     if (!plausible.length) {
       pending = null; confirmed = null;
       result = base('off_network', 'no_trace_within_uncertainty', { nearestDistanceMetres: nearest[0]?.distanceMetres ?? null });
@@ -114,9 +136,9 @@ export function createGpsTracker(network, { clock = Date.now } = {}) {
     const best = plausible[0];
     const sections = plausibleSections.get(best.sourceWayId).sort((a, b) => a-b);
     const multipleSections = sections.some((index, i) => i > 0 && index > sections[i-1] + 1);
-    if (plausible.length > 1 || multipleSections || best.kind !== 'piste' || best.distanceMetres > GPS_POLICY.maxConfirmedDistanceMetres) {
+    if (plausible.length > 1 || !best.inNetwork || multipleSections || best.kind !== 'piste' || best.distanceMetres > GPS_POLICY.maxConfirmedDistanceMetres) {
       pending = null; confirmed = null;
-      result = base('ambiguous', plausible.length > 1 ? 'multiple_plausible_traces' : multipleSections ? 'same_trace_multiple_sections' : best.kind !== 'piste' ? 'lift_position_unresolved' : 'trace_too_distant', { candidates });
+      result = base('ambiguous', plausible.length > 1 ? 'multiple_plausible_traces' : !best.inNetwork ? 'outside_selected_network' : multipleSections ? 'same_trace_multiple_sections' : best.kind !== 'piste' ? 'lift_position_unresolved' : 'trace_too_distant', { candidates });
       return structuredClone(result);
     }
     if (confirmed !== best.sourceWayId) {
