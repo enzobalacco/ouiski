@@ -23,6 +23,25 @@ l'échelle ; le bouton de recentrage revient au front des Claux.
 
 ## Essayer sur un téléphone
 
+### Dossier autonome pour un hébergement privé
+
+```sh
+node navigation/vars-les-claux/mobile-test/export-static.mjs
+```
+
+Le dossier généré `mobile-test/private-build/` contient seulement les neuf ressources
+statiques nécessaires, plus un manifeste SHA-256. Aucun certificat, clé privée,
+serveur, compte, dépendance de test ou position personnelle n'est inclus.
+L'export peut être relancé ; il refuse les liens symboliques et les fichiers inconnus.
+Il ne déploie rien et ne modifie pas l'hébergement existant.
+
+Avant toute mise en ligne : créer un projet séparé, activer une authentification
+obligatoire pour toutes les URL (y compris accès direct au déploiement), confirmer
+le blocage depuis une session non connectée, puis seulement utiliser le lien HTTPS.
+Une URL non répertoriée n'est pas une protection. Aucun script analytique ne doit
+être ajouté. Le contrôle d'accès est une condition de déploiement, pas une fonction
+de l'export statique. Le compte d'hébergement reste à connecter séparément.
+
 La page doit être accessible au téléphone dans un **contexte sécurisé** : HTTPS
 avec un certificat reconnu par le téléphone, ou un accès local par un mécanisme
 de développement approprié. Une simple adresse HTTP sur le réseau Wi-Fi n'est
