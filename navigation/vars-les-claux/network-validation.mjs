@@ -51,4 +51,3 @@ export function validateNetwork(network) {
   }
   return { nodes, ways };
 }
-
