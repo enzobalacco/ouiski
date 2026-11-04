@@ -29,7 +29,7 @@ l'échelle ; le bouton de recentrage revient au front des Claux.
 node navigation/vars-les-claux/mobile-test/export-static.mjs
 ```
 
-Le dossier généré `mobile-test/private-build/` contient seulement les neuf ressources
+Le dossier généré `mobile-test/private-build/` contient seulement les dix ressources
 statiques nécessaires, plus un manifeste SHA-256. Aucun certificat, clé privée,
 serveur, compte, dépendance de test ou position personnelle n'est inclus.
 L'export peut être relancé ; il refuse les liens symboliques et les fichiers inconnus.
@@ -104,12 +104,18 @@ et une horloge SIMULÉS, pas des positions personnelles. Vérifications aux form
 permission, masquage de page, absence de requêtes pendant le suivi et échec de
 chargement des données. Les tests du serveur vérifient ses restrictions d'accès.
 
-Résultat local : **106 tests de module/serveur + 5 tests navigateur = 111 réussis**.
+Résultat local avec le bilan d'essai : **115 tests de module/serveur + 6 tests navigateur = 121 réussis**.
 Cela ne prouve pas une compatibilité réelle iPhone/Safari ou Android/Chrome : les
 formats de fenêtre ne remplacent pas les appareils. Le workflow GitHub est ajouté,
 mais ses exécutions distantes doivent être vérifiées séparément.
 
 ## Avant utilisation sur les pistes
+
+Le panneau « Votre essai sur téléphone » guide la réception, trente secondes de
+signal récent, l'arrêt, la relance et le masquage de la page. Son bilan peut être
+copié sans coordonnées, piste, identité ni date exacte. Il reste en mémoire et ne
+constitue pas une validation terrain. Voir `../PHONE-TEST-PROTOCOL.md` pour le
+protocole et le journal des essais réels, qui restent à effectuer.
 
 Faire d'abord un test statique sur téléphone, puis des essais accompagnés dans
 un petit secteur validé avec la station, sans se guider avec ce banc. Mesurer

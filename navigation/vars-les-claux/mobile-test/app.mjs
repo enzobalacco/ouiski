@@ -1,8 +1,23 @@
 import { createGpsTracker } from '/modules/gps-tracker.mjs';
 import { createGpsSession } from '/session.mjs';
+import { createTrialRecorder } from '/modules/gps-trial.mjs';
 const el = id => document.getElementById(id);
 const svgNS = 'http://www.w3.org/2000/svg';
 let session = null, radius = 700;
+const trial = createTrialRecorder();
+function renderTrial(stats = trial.snapshot()) {
+  for (const name of ['received', 'sustained', 'cleared', 'restarted', 'hiddenStop']) {
+    el(`check-${name}`).textContent = stats[name] ? 'Observé ✓' : 'À vérifier';
+  }
+  el('trial-progress').textContent = `${Math.floor(stats.longestFreshMs/1000)} s de signal récent en continu (objectif : 30 s).`;
+  el('trial-report').value = trial.report();
+}
+el('reset-trial').onclick = () => { session?.stop('trial_reset'); trial.reset(); renderTrial(); el('copy-status').textContent = ''; };
+el('copy-report').onclick = async () => {
+  try { await navigator.clipboard.writeText(trial.report()); el('copy-status').textContent = 'Bilan copié, sans coordonnées.'; }
+  catch { el('trial-report').focus(); el('trial-report').select(); el('copy-status').textContent = 'Sélectionnez puis copiez le texte du bilan.'; }
+};
+renderTrial();
 const titles = { position_confirmed: 'Piste estimée — à vérifier', ambiguous: 'Position ambiguë', low_accuracy: 'Signal GPS insuffisant', off_network: 'Hors du réseau candidat', gps_unavailable: 'GPS indisponible' };
 const descriptions = {
   consistent_unique_geometric_match: 'Plusieurs mesures concordent. Cela ne valide pas un trajet ni l’ouverture de la piste.',
@@ -36,6 +51,7 @@ try {
     path.append(title); el('traces').append(path);
   }
   session = createGpsSession({ geo: navigator.geolocation, tracker, onUpdate: ({ active, result, fix, error }) => {
+    el('loading').textContent = active ? 'Suivi demandé sur cet appareil.' : 'Carte prête. Aucun suivi actif.';
     el('start').disabled = active; el('stop').disabled = !active;
     el('state').textContent = active ? titles[result.state] : 'GPS arrêté';
     el('explanation').textContent = errors[error] || (active ? descriptions[result.reason] || 'La piste reste incertaine. Aucun guidage n’est proposé.' : 'Cliquez sur Démarrer pour demander la localisation.');
@@ -43,6 +59,7 @@ try {
     el('coordinates').textContent = fix ? `${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)}` : '—';
     el('track').textContent = result.match ? result.match.name || `Tronçon ${result.match.sourceWayId}` : 'Non déterminée';
     el('dot').toggleAttribute('hidden', !fix); el('uncertainty').toggleAttribute('hidden', !fix);
+    renderTrial(trial.record({ active, hasFreshFix: !!fix, fixTimestamp: fix?.timestamp, error }));
     if (fix) {
       const [x, y] = project([fix.latitude, fix.longitude]);
       el('dot').setAttribute('cx', x); el('dot').setAttribute('cy', y);

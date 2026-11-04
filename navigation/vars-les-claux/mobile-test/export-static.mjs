@@ -9,6 +9,7 @@ const sources = {
   'modules/gps-tracker.mjs': '../gps-tracker.mjs',
   'modules/gps-geometry.mjs': '../gps-geometry.mjs',
   'modules/network-validation.mjs': '../network-validation.mjs',
+  'modules/gps-trial.mjs': '../gps-trial.mjs',
 };
 
 /** Prépare seulement des fichiers statiques, sans compte, clé, serveur ou déploiement. */

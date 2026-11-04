@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { exportStatic } from './mobile-test/export-static.mjs';
 
-test('Export : neuf ressources autonomes, empreintes vérifiées et génération reproductible', async () => {
+test('Export : dix ressources autonomes, empreintes vérifiées et génération reproductible', async () => {
   const destination = await mkdtemp(join(tmpdir(), 'ouiski-static-'));
   try {
     const first = await exportStatic(destination);
-    assert.equal(Object.keys(first.files).length, 9);
+    assert.equal(Object.keys(first.files).length, 10);
     assert.equal(Object.keys(first.files).some(n => /server|private|\.git|package/.test(n)), false);
     for (const [name, hash] of Object.entries(first.files)) {
       assert.equal(createHash('sha256').update(await readFile(join(destination, name))).digest('hex'), hash);

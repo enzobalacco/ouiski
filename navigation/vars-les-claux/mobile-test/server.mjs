@@ -9,7 +9,7 @@ const files = new Map([
   ['/style.css', ['style.css', 'text/css']],
   ['/network.json', ['../network.json', 'application/json']],
   ['/source.json', ['../../../dist/ski-data.json', 'application/json']],
-  ...['gps-tracker.mjs', 'gps-geometry.mjs', 'network-validation.mjs'].map(n => [`/modules/${n}`, [`../${n}`, 'text/javascript']]),
+  ...['gps-tracker.mjs', 'gps-geometry.mjs', 'network-validation.mjs', 'gps-trial.mjs'].map(n => [`/modules/${n}`, [`../${n}`, 'text/javascript']]),
 ]);
 
 /** Serveur de fichiers en liste blanche, sans route de collecte ni journal HTTP. */

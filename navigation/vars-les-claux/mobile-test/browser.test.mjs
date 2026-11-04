@@ -83,3 +83,31 @@ test('Données inaccessibles : aucun capteur activé et démarrage bloqué', asy
     assert.equal(await page.evaluate(() => simulatedGps.count()), 0);
   });
 });
+
+test('Essai guidé : bilan observé, effacement, redémarrage et copie sans localisation ni réseau', async () => {
+  await run({ width: 390, height: 844 }, async ({ page, base, requests }) => {
+    await page.goto(base); await page.locator('#start:enabled').waitFor();
+    assert.equal(await page.locator('#check-received').innerText(), 'À vérifier');
+    const before = requests.length;
+    await page.locator('#start').click();
+    assert.equal(await page.locator('#loading').innerText(), 'Suivi demandé sur cet appareil.');
+    await page.evaluate(() => { for (let i = 0; i < 31; i++) simulatedGps.emit(); });
+    assert.equal(await page.locator('#check-sustained').innerText(), 'Observé ✓');
+    await page.locator('#stop').click();
+    assert.equal(await page.locator('#check-cleared').innerText(), 'Observé ✓');
+    assert.equal(await page.locator('#coordinates').innerText(), '—');
+    await page.locator('#start').click(); await page.evaluate(() => simulatedGps.emit());
+    assert.equal(await page.locator('#check-restarted').innerText(), 'Observé ✓');
+    await page.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+    assert.equal(await page.locator('#check-hiddenStop').innerText(), 'Observé ✓');
+    const report = await page.locator('#trial-report').inputValue();
+    assert.equal(report.includes('44.571'), false); assert.equal(report.includes('6.68'), false);
+    await page.evaluate(() => Object.defineProperty(navigator, 'clipboard', { value: { writeText: async text => { window.copiedReport = text; } } }));
+    await page.locator('#copy-report').click();
+    assert.equal(await page.evaluate(() => copiedReport), report);
+    await page.locator('#reset-trial').click();
+    assert.equal(await page.locator('#check-received').innerText(), 'À vérifier');
+    assert.equal(await page.evaluate(() => simulatedGps.count()), 0);
+    assert.equal(requests.length, before);
+  });
+});
