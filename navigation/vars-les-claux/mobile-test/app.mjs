@@ -28,7 +28,7 @@ const descriptions = {
   horizontal_accuracy_insufficient: 'La précision annoncée ne permet pas d’identifier une piste.',
   implausible_motion: 'Le déplacement apparent est incohérent. Attente de nouvelles mesures.',
 };
-const errors = { permission_denied: 'Localisation refusée. Vous pouvez la modifier dans les réglages du navigateur.', unsupported: 'Ce navigateur ne fournit pas de géolocalisation.', timeout: 'Le GPS ne répond pas. Attendez dehors avec une vue dégagée.', sensor_unavailable: 'La localisation est indisponible.', hidden: 'Suivi arrêté car la page a été masquée.', insecure: 'Le GPS nécessite HTTPS ou une ouverture locale sur cet appareil.' };
+const errors = { permission_denied: 'Localisation refusée. Vous pouvez la modifier dans les réglages du navigateur.', unsupported: 'Ce navigateur ne fournit pas de géolocalisation.', timeout: 'Le GPS ne répond pas. Attendez dehors avec une vue dégagée.', sensor_unavailable: 'La localisation est indisponible.', internal_error: 'Le suivi a été arrêté après une erreur interne. Vous pouvez tenter un nouveau démarrage.', hidden: 'Suivi arrêté car la page a été masquée.', insecure: 'Le GPS nécessite HTTPS ou une ouverture locale sur cet appareil.' };
 function view() { el('map').setAttribute('viewBox', `${-radius} ${-radius*0.72} ${radius*2} ${radius*1.44}`); }
 el('zoom-in').onclick = () => { radius = Math.max(150, radius/1.5); view(); };
 el('zoom-out').onclick = () => { radius = Math.min(6000, radius*1.5); view(); };
@@ -59,7 +59,7 @@ try {
     el('coordinates').textContent = fix ? `${fix.latitude.toFixed(6)}, ${fix.longitude.toFixed(6)}` : '—';
     el('track').textContent = result.match ? result.match.name || `Tronçon ${result.match.sourceWayId}` : 'Non déterminée';
     el('dot').toggleAttribute('hidden', !fix); el('uncertainty').toggleAttribute('hidden', !fix);
-    renderTrial(trial.record({ active, hasFreshFix: !!fix, fixTimestamp: fix?.timestamp, error }));
+    renderTrial(trial.record({ active, hasFreshFix: !!fix, fixTimestamp: fix?.timestamp, error, reason: result.reason }));
     if (fix) {
       const [x, y] = project([fix.latitude, fix.longitude]);
       el('dot').setAttribute('cx', x); el('dot').setAttribute('cy', y);

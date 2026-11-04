@@ -104,7 +104,7 @@ et une horloge SIMULÉS, pas des positions personnelles. Vérifications aux form
 permission, masquage de page, absence de requêtes pendant le suivi et échec de
 chargement des données. Les tests du serveur vérifient ses restrictions d'accès.
 
-Résultat local avec le bilan d'essai : **115 tests de module/serveur + 6 tests navigateur = 121 réussis**.
+Résultat local avec le bilan d'essai : **122 tests de module/serveur + 8 tests navigateur = 130 réussis**.
 Cela ne prouve pas une compatibilité réelle iPhone/Safari ou Android/Chrome : les
 formats de fenêtre ne remplacent pas les appareils. Le workflow GitHub est ajouté,
 mais ses exécutions distantes doivent être vérifiées séparément.
@@ -122,3 +122,21 @@ un petit secteur validé avec la station, sans se guider avec ce banc. Mesurer
 précision, erreurs de piste, interruptions, comportement en poche et batterie.
 Définir consentement et protocole avant toute éventuelle collecte future. Aucune
 collecte n'est activée ici. Voir `../readiness.md` et `../GPS-README.md`.
+
+## Diagnostic v2
+
+Le bilan distingue les expirations sans mesure récente, les délais signalés par
+le capteur, les indisponibilités, les observations rejetées et les causes inconnues.
+Un trou entre mesures est compté même si la mesure suivante arrive avant le timer.
+Les arrêts volontaires et masquages ne sont pas classés comme pertes de signal.
+Ces motifs sont des observations logicielles, pas une preuve de la cause physique.
+
+En cas d'erreur interne, les ressources sont annulées autant que l'adaptateur le
+permet, les callbacks sont invalidés et l'affichage reçoit un état sans position.
+Si l'adaptateur refuse son nettoyage, une erreur est signalée ; le logiciel ne
+garantit pas l'état physique d'un capteur défaillant.
+
+La coupure réseau après chargement est testée avec un capteur simulé. Aucun mode
+hors connexion au premier chargement ni stockage de carte persistant n'est ajouté.
+Voir `../USER-TRIAL-RESULTS.md` pour les retours réels rapportés et
+`../DEVELOPMENT-STATUS.md` pour les prochaines conditions de validation.

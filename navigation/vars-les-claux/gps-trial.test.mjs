@@ -23,7 +23,36 @@ test('Essai : répéter une mesure ou reprendre après un trou ne crée pas tren
   for (let t = 1000; t <= 9000; t += 1000) event(t, { fixTimestamp: 0 });
   assert.equal(trial.snapshot().observations, 1);
   event(40_000); assert.equal(trial.snapshot().sustained, false);
-  event(50_001, { fixTimestamp: 40_000 }); assert.equal(trial.snapshot().interruptions, 1);
+  assert.equal(trial.snapshot().interruptions, 1);
+  event(50_001, { fixTimestamp: 40_000 }); assert.equal(trial.snapshot().interruptions, 2);
+});
+
+test('Diagnostic : un trou non vu par le timer est compté comme expiration', () => {
+  const { trial, event } = setup(); event(0); event(11_000);
+  assert.equal(trial.snapshot().lossCauses.expired, 1);
+  assert.equal(trial.snapshot().interruptions, 1);
+  event(12_000); assert.equal(trial.snapshot().interruptions, 1);
+});
+test('Diagnostic : motifs distincts, sans doublons à chaque rafraîchissement', () => {
+  for (const [error, reason, expected] of [
+    [null, 'signal_timeout', 'expired'], ['timeout', 'sensor_unavailable', 'sensorTimeout'],
+    ['sensor_unavailable', null, 'sensorUnavailable'], [null, 'invalid_observation', 'rejected'],
+    [null, 'unknown', 'unknown'],
+  ]) {
+    const { trial, event } = setup(); event(0);
+    event(1000, { hasFreshFix: false, error, reason });
+    event(2000, { hasFreshFix: false, error, reason });
+    const s = trial.snapshot(); assert.equal(s.interruptions, 1); assert.equal(s.lossCauses[expected], 1);
+    assert.equal(Object.values(s.lossCauses).reduce((a,b)=>a+b,0), s.interruptions);
+    const copy = trial.snapshot(); copy.lossCauses[expected] = 100;
+    assert.equal(trial.snapshot().lossCauses[expected], 1);
+  }
+});
+test('Diagnostic : arrêt volontaire et masquage ne sont pas des pertes de signal', () => {
+  for (const error of [null, 'hidden']) {
+    const { trial, event } = setup(); event(0); event(1000, { active: false, hasFreshFix: false, error });
+    assert.equal(trial.snapshot().interruptions, 0);
+  }
 });
 test('Essai : une interruption ne cumule pas les durées en une continuité fictive', () => {
   const { trial, event } = setup();

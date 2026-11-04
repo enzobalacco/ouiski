@@ -18,12 +18,42 @@ function setup({ syncError = false, unsupported = false } = {}) {
   const session = createGpsSession({ geo, tracker, onUpdate: s => updates.push(s),
     setTimer(fn) { tick = fn; return 7; }, clearTimer(id) { timerCleared.push(id); } });
   const fix = () => success({ coords: { latitude: 44.571, longitude: 6.68, accuracy: 5 }, timestamp: 123 });
-  return { session, cleared, timerCleared, updates, fix, fail: e => error(e), tick: () => tick(),
+  return { session, geo, tracker, cleared, timerCleared, updates, fix, fail: e => error(e), tick: () => tick(),
     expire: () => { state = { state: 'gps_unavailable', match: null }; }, counts: () => ({ reset, unavailable }) };
 }
 test('Session : aucune acquisition avant clic et un seul capteur lors de démarrages répétés', () => {
   const h = setup(); assert.equal(h.updates.length, 0); h.session.start(); h.session.start();
   h.fix(); assert.equal(h.updates.at(-1).active, true); h.session.stop(); assert.deepEqual(h.cleared, [42]);
+});
+
+test('Erreur du moteur dans un callback : arrêt, effacement et callbacks suivants ignorés', () => {
+  const h = setup(); h.session.start(); h.fix();
+  h.tracker.update = () => { throw new Error('erreur simulée'); };
+  assert.doesNotThrow(() => h.fix());
+  assert.deepEqual(h.cleared, [42]); assert.deepEqual(h.timerCleared, [7]);
+  assert.equal(h.updates.at(-1).error, 'internal_error'); assert.equal(h.updates.at(-1).fix, null);
+  const count = h.updates.length; h.fix(); assert.equal(h.updates.length, count);
+});
+test('Erreur du statut ou de la réinitialisation : aucun démarrage du capteur laissé actif', () => {
+  const h = setup(); h.session.start();
+  h.tracker.status = () => { throw new Error('horloge simulée'); };
+  assert.doesNotThrow(() => h.tick());
+  assert.equal(h.updates.at(-1).active, false); assert.deepEqual(h.cleared, [42]);
+  const other = setup(); other.tracker.reset = () => { throw new Error('reset simulé'); };
+  assert.doesNotThrow(() => other.session.start()); assert.equal(other.updates.at(-1).error, 'internal_error');
+});
+test('Erreur de nettoyage : le timer est quand même annulé et un échec interne est signalé', () => {
+  const h = setup(); h.session.start(); h.fix();
+  h.geo.clearWatch = () => { throw new Error('adaptateur défaillant'); };
+  assert.doesNotThrow(() => h.session.stop());
+  assert.deepEqual(h.timerCleared, [7]); assert.equal(h.updates.at(-1).error, 'internal_error');
+  assert.equal(h.updates.at(-1).fix, null);
+});
+test('Erreur dans l’affichage : aucun suivi ne reste actif en silence', () => {
+  let started = 0;
+  const session = createGpsSession({ geo: { watchPosition: () => ++started, clearWatch() {} },
+    tracker: { reset() {}, status: () => ({ state: 'gps_unavailable' }) }, onUpdate() { throw new Error('affichage indisponible'); } });
+  assert.doesNotThrow(() => session.start()); assert.equal(started, 0);
 });
 test('Arrêt : effacement, timer et capteur annulés ; callback tardif ignoré', () => {
   const h = setup(); h.session.start(); h.fix(); assert.ok(h.updates.at(-1).fix);

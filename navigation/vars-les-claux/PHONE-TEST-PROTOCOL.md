@@ -52,8 +52,10 @@ ne devient exploitable à partir de ces résultats.
 | 2 | Android / Chrome — à essayer | Non exécuté | Non exécuté | Non exécuté | Non exécuté | Non exécuté | À planifier |
 | 3 | Deuxième essai après rechargement | Non exécuté | Non exécuté | Non exécuté | Non exécuté | Non exécuté | À planifier |
 
-À ce stade, l'utilisateur a seulement rapporté l'apparition d'une estimation en
-mètres sur téléphone. Les autres critères ne sont pas considérés comme validés.
+Les premiers bilans rapportés sont consignés dans `USER-TRIAL-RESULTS.md`.
+Ils couvrent les fonctions de base sur plusieurs sessions, sans qualifier la
+stabilité ni identifier l'appareil. Ce tableau reste un modèle pour les essais
+comparatifs à planifier, pas un remplacement de ces retours.
 Les tests navigateur automatisés utilisent un capteur simulé : ils ne remplissent
 pas ce journal et ne remplacent pas les appareils.
 

@@ -24,6 +24,7 @@ async function run(viewport, action) {
         emit() { now += 1000; for (const w of watchers.values()) w.ok({ coords: { latitude: 44.571, longitude: 6.680, accuracy: 5 }, timestamp: now }); },
         deny() { for (const w of [...watchers.values()]) w.error({ code: 1 }); },
         expire() { now += 11_000; }, count() { return watchers.size; },
+        timeout() { for (const w of [...watchers.values()]) w.error({ code: 3 }); },
       };
     });
     const base = `http://127.0.0.1:${server.address().port}`;
@@ -81,6 +82,38 @@ test('Données inaccessibles : aucun capteur activé et démarrage bloqué', asy
     await page.waitForFunction(() => document.getElementById('loading').textContent.includes('Impossible'));
     assert.equal(await page.locator('#start').isDisabled(), true);
     assert.equal(await page.evaluate(() => simulatedGps.count()), 0);
+  });
+});
+
+test('Diagnostic v2 : expiration et délai capteur sont distingués sans réutiliser une ancienne position', async () => {
+  await run({ width: 390, height: 844 }, async ({ page, base, requests }) => {
+    await page.goto(base); await page.locator('#start:enabled').waitFor();
+    const before = requests.length; await page.locator('#start').click();
+    await page.evaluate(() => simulatedGps.emit());
+    await page.evaluate(() => simulatedGps.expire());
+    await page.waitForFunction(() => document.getElementById('trial-report').value.includes('Dont expiration sans mesure récente : 1'));
+    assert.equal(await page.locator('#coordinates').innerText(), '—');
+    await page.evaluate(() => { simulatedGps.emit(); simulatedGps.timeout(); });
+    const report = await page.locator('#trial-report').inputValue();
+    assert.match(report, /Dont délai dépassé signalé par le capteur : 1/);
+    assert.match(report, /Interruptions observées pendant le suivi : 2/);
+    assert.equal(await page.locator('#coordinates').innerText(), '—');
+    assert.equal(report.includes('44.571'), false); assert.equal(requests.length, before);
+  });
+});
+
+test('Perte de réseau après chargement : le traitement local continue sans requête ni perte de contrôle du capteur', async () => {
+  await run({ width: 390, height: 844 }, async ({ page, base, requests }) => {
+    await page.goto(base); await page.locator('#start:enabled').waitFor();
+    const before = requests.length;
+    await page.context().setOffline(true);
+    await page.locator('#start').click();
+    await page.evaluate(() => { simulatedGps.emit(); simulatedGps.emit(); simulatedGps.emit(); });
+    assert.notEqual(await page.locator('#coordinates').innerText(), '—');
+    await page.locator('#stop').click();
+    assert.equal(await page.locator('#coordinates').innerText(), '—');
+    assert.equal(await page.evaluate(() => simulatedGps.count()), 0);
+    assert.equal(requests.length, before);
   });
 });
 
